@@ -23,8 +23,8 @@ label{display:block;font-size:13px;color:#333}
 .top-in{max-width:1100px;margin:0 auto;display:flex;align-items:center;gap:10px;padding:8px 12px}
 .logo-s{height:34px}
 .back{font-size:34px;line-height:1;text-decoration:none;color:var(--g);padding:0 8px 4px 0}
-.tt{flex:1;min-width:0}.t1{font-weight:700;color:var(--g);font-size:16px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.t2{font-size:12px;color:var(--mu);display:flex;gap:6px;align-items:center}
-.sync{font-size:11px;padding:4px 8px;border-radius:12px;background:var(--gb);white-space:nowrap;max-width:44vw;overflow:hidden;text-overflow:ellipsis}
+.tt{flex:1 1 auto;min-width:150px}.t1{font-weight:700;color:var(--g);font-size:16px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.t2{font-size:12px;color:var(--mu);display:flex;gap:6px;align-items:center;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.sync{font-size:11px;padding:4px 8px;border-radius:12px;background:var(--gb);white-space:nowrap;max-width:34vw;flex:0 1 auto;min-width:0;overflow:hidden;text-overflow:ellipsis}
 .sync.ok{background:var(--vb);color:var(--v)}.sync.busy{background:var(--ab);color:var(--a)}.sync.err{background:var(--rb);color:var(--r)}.sync.local{background:var(--ib);color:var(--i)}
 .tabs{background:#fff;display:flex;overflow-x:auto;border-bottom:1px solid var(--gr);scrollbar-width:none}
 .tabs::-webkit-scrollbar{display:none}
@@ -106,9 +106,15 @@ details summary{cursor:pointer;color:var(--g);font-size:13px;margin-top:6px}
 .top10 li{margin-bottom:8px}
 .graf{width:100%;height:auto}.graf .gl{stroke:#e5e5e5}.graf .gt{font-size:11px;fill:#777}.graf .ln{stroke:var(--g);stroke-width:2.5}.graf .pl{font-size:12px;font-weight:700;fill:#333}
 .graf .pt{stroke:#fff;stroke-width:2}.graf .pt.v{fill:#4b8b3b}.graf .pt.a{fill:#d6a700}.graf .pt.r{fill:#c0392b}.graf .pt.g{fill:#999}
+
+.cap-b{border-color:#244a74;color:#244a74}
+.tag.cap-t{background:var(--ib);color:var(--i);border-color:#b9cbe3;font-weight:700}
+.card.visita.cap{border-style:dashed;border-color:#9fb5d3}
+.card.capban{background:var(--ib);border:1px dashed #9fb5d3;font-size:14px}
+.rep-cap{border:1.5pt dashed #9C0006;color:#9C0006;text-align:center;font-weight:700;padding:5px;margin:4px 0 6px;letter-spacing:.06em}
 #toast{position:fixed;left:50%;bottom:24px;transform:translateX(-50%) translateY(80px);background:#333;color:#fff;padding:9px 16px;border-radius:20px;font-size:14px;transition:transform .25s;z-index:50}
 #toast.show{transform:translateX(-50%) translateY(0)}
-@media(max-width:520px){.resp{grid-template-columns:repeat(2,1fr)}.big{font-size:26px}.wrap{padding:10px 8px 80px}.card{padding:12px}}
+@media(max-width:520px){.logo-s{height:26px}.resp{grid-template-columns:repeat(2,1fr)}.big{font-size:26px}.wrap{padding:10px 8px 80px}.card{padding:12px}}
 
 /* ---------- Reporte ---------- */
 .rep-bar{max-width:8.5in;margin:12px auto;display:flex;gap:8px;flex-wrap:wrap;align-items:center;padding:0 8px}
@@ -586,15 +592,17 @@ details summary{cursor:pointer;color:var(--g);font-size:13px;margin-top:6px}
   let DB = LS.get('cedula.db', { recs: {}, rev: 0 });
   let OUTBOX = LS.get('cedula.outbox', {});
   let CFG = Object.assign({ url: DEFAULT_URL, token: '', evaluador: '' }, LS.get('cedula.cfg', {}));
-  if (!CFG.url && DEFAULT_URL) CFG.url = DEFAULT_URL;
+  if (DEFAULT_URL) CFG.url = DEFAULT_URL; // la URL del servidor solo se cambia editando index.html
+  const esCap = v => String(v || '').startsWith('CAP-');
   const saveDB = () => { LS.set('cedula.db', DB); LS.set('cedula.outbox', OUTBOX); };
   const saveCFG = () => LS.set('cedula.cfg', CFG);
 
   const keyOf = r => r.v + '|' + r.t + '|' + r.k;
   function put(v, t, k, d, val, del) {
     const rec = { v, t, k: String(k), d: d || {}, val: val || '', u: CFG.evaluador || '', ts: Math.max(Date.now(), ((DB.recs[v + '|' + t + '|' + k] || {}).ts || 0) + 1), del: del ? 1 : 0 };
-    DB.recs[keyOf(rec)] = rec; OUTBOX[keyOf(rec)] = rec; saveDB();
-    programarSync(1500);
+    DB.recs[keyOf(rec)] = rec;
+    if (!esCap(v)) { OUTBOX[keyOf(rec)] = rec; programarSync(1500); }
+    saveDB();
     return rec;
   }
   function recs(v, t) { return Object.values(DB.recs).filter(r => r.v === v && r.t === t && !r.del); }
@@ -634,7 +642,9 @@ details summary{cursor:pointer;color:var(--g);font-size:13px;margin-top:6px}
   }
   function textoSync() {
     const p = Object.keys(OUTBOX).length;
+    if (esCap(S.v) && S.p !== 'inicio') return { c: 'local', t: 'Práctica: solo en este equipo' };
     if (!CFG.url) return { c: 'local', t: 'Solo en este dispositivo' };
+    if (!CFG.token && (!ultimoError || ultimoError === 'Clave de brigada incorrecta')) return { c: 'busy', t: 'Sin clave' + (p ? ' · ' + p + ' sin enviar' : '') };
     if (syncing) return { c: 'busy', t: 'Sincronizando…' };
     if (ultimoError) return { c: 'err', t: ultimoError + (p ? ' · ' + p + ' sin enviar' : '') };
     if (p) return { c: 'busy', t: p + ' cambio(s) por enviar' };
@@ -707,7 +717,7 @@ details summary{cursor:pointer;color:var(--g);font-size:13px;margin-top:6px}
   function visitas() {
     return Object.values(DB.recs).filter(r => r.t === 'visita' && r.k === 'meta' && !r.del).map(r => {
       const d = {}; recs(r.v, 'dato').forEach(x => d[x.k] = x.d.v);
-      return { id: r.v, creado: r.d.creado, por: r.u, fecha: d.fecha || '', tipo: d.tipo || '', estado: r.d.estado || 'abierta' };
+      return { id: r.v, creado: r.d.creado, por: r.u, fecha: d.fecha || '', tipo: d.tipo || '', estado: r.d.estado || 'abierta', cap: esCap(r.v) };
     }).sort((a, b) => (b.fecha || '').localeCompare(a.fecha || '') || b.creado - a.creado);
   }
 
@@ -761,12 +771,12 @@ details summary{cursor:pointer;color:var(--g);font-size:13px;margin-top:6px}
     if (CFG.url && !CFG.token) h += '<div class="card aviso"><b>Escriba la clave de la brigada</b> para guardar en la hoja compartida (se la da el coordinador).<div class="row"><input id="claveBrig" placeholder="Clave"><button class="btn pri" data-a="guardarClave">Guardar</button></div></div>';
     else if (ultimoError === 'Clave de brigada incorrecta') h += '<div class="card aviso"><b>La clave de la brigada no es correcta.</b> Corríjala:<div class="row"><input id="claveBrig" placeholder="Clave"><button class="btn pri" data-a="guardarClave">Guardar</button></div></div>';
     if (!CFG.url) h += '<div class="card aviso2">Sin servidor configurado: los datos se guardan solo en este dispositivo. Para trabajar entre varios y conservar el historial, configure la conexión en <a href="#p=config">Configuración</a>.</div>';
-    h += '<div class="acciones"><button class="btn pri grande" data-a="nuevaVisita">＋ Nueva visita</button><a class="btn" href="#p=historial">Historial y tendencia</a><a class="btn" href="#p=config">Configuración</a></div>';
+    h += '<div class="acciones"><button class="btn pri grande" data-a="nuevaVisita">＋ Nueva visita</button><button class="btn grande cap-b" data-a="nuevaCap">🎓 Visita de capacitación</button><a class="btn" href="#p=historial">Historial y tendencia</a><a class="btn" href="#p=config">Configuración</a></div>';
     h += '<h2>Visitas</h2>';
     if (!vs.length) h += '<p class="muted">Todavía no hay visitas registradas.</p>';
     vs.forEach(v => {
       const r = calc(v.id);
-      h += '<a class="card visita" href="#p=panel&v=' + v.id + '"><div><div class="vf">' + fechaLarga(v.fecha) + ' · ' + esc(v.tipo || 'Visita') + '</div>' +
+      h += '<a class="card visita' + (v.cap ? ' cap' : '') + '" href="#p=panel&v=' + v.id + '"><div><div class="vf">' + (v.cap ? '<span class="tag cap-t">Capacitación · solo en este equipo</span> ' : '') + fechaLarga(v.fecha) + ' · ' + esc(v.cap ? 'Práctica' : (v.tipo || 'Visita')) + '</div>' +
         '<div class="muted small">' + r.tot.contestados + ' de ' + r.tot.reactivos + ' reactivos · cumplimiento ' + pct(r.tot.pct) + (r.clasif.codigo ? ' · ' + esc(r.clasif.codigo) : '') + '</div></div>' + chip(r.tot.sem) + '</a>';
     });
     h += '</main>';
@@ -776,7 +786,7 @@ details summary{cursor:pointer;color:var(--g);font-size:13px;margin-top:6px}
   function vConfig() {
     let h = barra('Configuración', '', 'p=inicio');
     h += '<main class="wrap"><div class="card"><label>Su nombre (aparece en cada respuesta)<input data-cfg="evaluador" value="' + esc(CFG.evaluador) + '"></label>' +
-      '<label>URL del servidor (Apps Script, termina en /exec)<input data-cfg="url" value="' + esc(CFG.url) + '" placeholder="https://script.google.com/macros/s/…/exec"></label>' +
+      '<div class="fld"><div class="lb">Servidor</div><div class="small">' + (CFG.url ? '✓ Hoja compartida del HGR Reynosa (fijo; solo el administrador lo cambia)' : 'Sin servidor: los datos se guardan solo en este equipo.') + '</div></div>' +
       '<label>Clave de la brigada (si se configuró TOKEN)<input data-cfg="token" value="' + esc(CFG.token) + '"></label>' +
       '<div class="row"><button class="btn pri" data-a="probar">Guardar y probar conexión</button><span id="prueba" class="muted"></span></div></div>' +
       '<div class="card"><h3>Respaldo</h3><p class="muted small">Exporte un respaldo de todo lo capturado en este dispositivo o importe uno.</p><div class="row"><button class="btn" data-a="respaldo">Descargar respaldo (.json)</button><label class="btn">Importar respaldo<input type="file" accept=".json" id="importar" hidden></label></div></div>' +
@@ -787,7 +797,7 @@ details summary{cursor:pointer;color:var(--g);font-size:13px;margin-top:6px}
 
   // ---------- Historial ----------
   function vHistorial() {
-    const vs = visitas().slice().reverse();
+    const vs = visitas().filter(v => !v.cap).slice().reverse();
     let h = barra('Historial y tendencia', 'Visitas a la UCIN', 'p=inicio');
     h += '<main class="wrap">';
     if (vs.length < 1) return h + '<p class="muted">No hay visitas.</p></main>';
@@ -825,6 +835,7 @@ details summary{cursor:pointer;color:var(--g);font-size:13px;margin-top:6px}
     let h = barra('Visita ' + fechaLarga(d.fecha), esc(d.tipo || '') + ' · ' + chip(r.tot.sem), 'p=inicio', tabs);
     h += '<main class="wrap">';
     if (!CFG.evaluador) h += '<div class="card aviso"><b>¿Quién está capturando?</b> ' + (r.brigada.length ? r.brigada.map(b => '<button class="chipb" data-a="soy" data-n="' + esc(b.nombre) + '">' + esc(b.nombre) + '</button>').join(' ') : '') + '<div class="row"><input id="nomEval" placeholder="Nombre y apellido"><button class="btn pri" data-a="guardarNombre">Guardar</button></div></div>';
+    if (esCap(S.v)) h += '<div class="card capban"><b>🎓 Visita de capacitación.</b> Solo existe en este equipo: nada se envía a la hoja compartida y nadie más la ve. Practique con libertad; al terminar puede eliminarla en <b>Datos</b>.' + (r.tot.contestados === 0 ? '<div class="row"><button class="btn" data-a="ejemplo">Llenar con respuestas de ejemplo</button><span class="muted xs">Útil para ver el resumen, el plan y el reporte completos.</span></div>' : '') + '</div>';
     const vistas = { panel: vPanel, modulo: vModulo, datos: vDatos, obs: vObs, ind: vInd, resumen: vResumen, plan: vPlan };
     h += (vistas[S.p] || vPanel)(r);
     h += '</main>';
@@ -903,7 +914,10 @@ details summary{cursor:pointer;color:var(--g);font-size:13px;margin-top:6px}
   function vDatos(r) {
     const d = r.entrada.datos;
     let h = '<div class="card"><h3>Datos de la unidad y de la visita</h3><div class="form2">';
-    CAMPOS_DATOS.forEach(c => { h += campo(c, d[c.k], 'data-a="dato" data-k="' + c.k + '"'); });
+    CAMPOS_DATOS.forEach(c => {
+      if (c.k === 'tipo' && esCap(S.v)) { h += '<div class="fld"><div class="lb">Tipo de visita</div><div><span class="tag cap-t">Capacitación en uso de la App</span></div><span class="muted xs">Una práctica no puede convertirse en visita real.</span></div>'; return; }
+      h += campo(c, d[c.k], 'data-a="dato" data-k="' + c.k + '"');
+    });
     h += '</div></div>';
     h += '<div class="card"><h3>Brigada (grupo interinstitucional)</h3><p class="muted small">Instituciones distintas: <b>' + r.instituciones + '</b> ' + (r.brigada.length ? (r.instituciones >= 2 ? '· Interinstitucional ✓' : '· <span class="txt-r">Falta otra institución (GI-15)</span>') : '') + '</p>';
     r.entrada.brigada.forEach(b => {
@@ -1028,7 +1042,7 @@ details summary{cursor:pointer;color:var(--g);font-size:13px;margin-top:6px}
   // ---------- Reporte imprimible ----------
   function visitaPrevia(r) {
     const f = r.entrada.datos.fecha; if (!f) return null;
-    const prev = visitas().filter(v => v.id !== S.v && v.fecha && v.fecha < f).sort((a, b) => b.fecha.localeCompare(a.fecha))[0];
+    const prev = visitas().filter(v => v.id !== S.v && !v.cap && v.fecha && v.fecha < f).sort((a, b) => b.fecha.localeCompare(a.fecha))[0];
     return prev ? { v: prev, r: calc(prev.id) } : null;
   }
   function vReporte(r) {
@@ -1038,6 +1052,7 @@ details summary{cursor:pointer;color:var(--g);font-size:13px;margin-top:6px}
     let h = '<div class="rep-bar no-print"><a class="btn" href="#p=resumen&v=' + S.v + '">‹ Regresar</a><button class="btn pri" data-a="imprimir">Imprimir / PDF (oficio)</button><button class="btn" data-a="excel">Exportar a Excel</button><label class="chk"><input type="checkbox" data-a="anexo" ' + (anexo ? 'checked' : '') + '> Incluir anexo con todas las respuestas y observaciones</label></div>';
     h += '<article class="rep">';
     h += '<header class="rep-h"><img src="' + LOGO + '" alt="IMSS Bienestar"><div class="rep-inst">SERVICIOS PÚBLICOS DE SALUD IMSS BIENESTAR<br>HOSPITAL GENERAL REYNOSA<br>"DR. JOSÉ MARÍA CANTÚ GARZA"<div class="rep-cl">CLUES TSIMB001260 · Región 2 – Reynosa</div></div></header>';
+    if (esCap(S.v)) h += '<div class="rep-cap">EJERCICIO DE CAPACITACIÓN · SIN VALIDEZ OFICIAL</div>';
     h += '<h1>Informe de la visita de verificación</h1><div class="rep-sub">Prevención de IAAS y RAM en la Unidad de Cuidados Intensivos Neonatales (UCIN)</div>';
     h += '<table class="rt kv2"><tbody><tr><th>Unidad</th><td>' + esc(d.hospital || '') + '</td><th>Fecha de la visita</th><td>' + fechaLarga(d.fecha) + (d.hInicio ? ' · ' + esc(d.hInicio) + (d.hFin ? '–' + esc(d.hFin) : '') : '') + '</td></tr>' +
       '<tr><th>Tipo de visita</th><td>' + esc(d.tipo || '—') + '</td><th>Nivel de la UCIN</th><td>' + esc(d.nivel || '—') + '</td></tr>' +
@@ -1126,11 +1141,37 @@ details summary{cursor:pointer;color:var(--g);font-size:13px;margin-top:6px}
       if (!CFG.evaluador) { alert('Primero escriba su nombre.'); return; }
       const id = 'V' + hoy().replace(/-/g, '') + '-' + Math.random().toString(36).slice(2, 6).toUpperCase();
       put(id, 'visita', 'meta', { creado: Date.now(), estado: 'abierta' }, 'abierta');
-      const datos = Object.assign({}, DEF_DATOS, { fecha: hoy(), tipo: visitas().length > 1 ? 'Seguimiento a 90 días' : 'Inicial' });
-      const prev = visitas().filter(v => v.id !== id)[0];
+      const reales = visitas().filter(v => v.id !== id && !v.cap);
+      const datos = Object.assign({}, DEF_DATOS, { fecha: hoy(), tipo: reales.length ? 'Seguimiento a 90 días' : 'Inicial' });
+      const prev = reales[0];
       if (prev) { const pd = entradaDe(prev.id).datos; ['nivel', 'cunas', 'jefeUcin', 'uveh', 'instCoord'].forEach(k => { if (pd[k]) datos[k] = pd[k]; }); }
       Object.entries(datos).forEach(([k, v]) => put(id, 'dato', k, { v }, v));
       ir({ p: 'datos', v: id });
+    },
+    nuevaCap() {
+      if (!CFG.evaluador) { alert('Primero escriba su nombre.'); return; }
+      const id = 'CAP-' + hoy().replace(/-/g, '') + '-' + Math.random().toString(36).slice(2, 6).toUpperCase();
+      put(id, 'visita', 'meta', { creado: Date.now(), estado: 'abierta', cap: 1 }, 'capacitación');
+      const datos = Object.assign({}, DEF_DATOS, { fecha: hoy(), tipo: 'Capacitación en uso de la App' });
+      Object.entries(datos).forEach(([k, v]) => put(id, 'dato', k, { v }, v));
+      put(id, 'brig', uid(), { nombre: CFG.evaluador, inst: 'IMSS-Bienestar', perfil: 'En capacitación', n: Date.now() }, CFG.evaluador);
+      ir({ p: 'panel', v: id });
+    },
+    ejemplo() {
+      if (!esCap(S.v)) return;
+      const v = S.v, pick = (a, w) => { let t = Math.random() * w.reduce((x, y) => x + y, 0); for (let i = 0; i < a.length; i++) { t -= w[i]; if (t <= 0) return a[i]; } return a[0]; };
+      [['nivel', L.nivel[2]], ['cunas', '24'], ['censo', '18'], ['brote', 'No'], ['jefeUcin', 'Jefe(a) de UCIN (ejemplo)'], ['uveh', 'Responsable UVEH (ejemplo)'], ['instCoord', 'Secretaría de Salud estatal'], ['periodoInd', 'Trimestre de ejemplo']].forEach(([k, x]) => put(v, 'dato', k, { v: x }, x));
+      put(v, 'brig', uid(), { nombre: 'Evaluador(a) de ejemplo', inst: 'Secretaría de Salud estatal', perfil: 'Infectología', n: Date.now() + 1 }, '');
+      DATA.modulos.forEach(m => m.reactivos.forEach(r => { const x = pick(['Cumple', 'Parcial', 'No cumple', 'No aplica'], [7, 2, 1.2, r.naPrevisto ? 1.5 : 0.2]); put(v, 'resp', r.clave, { r: x, obs: '' }, x); }));
+      const ob = (d) => put(v, 'obs', uid(), Object.assign({ n: Date.now() + Math.random() }, d), d.f);
+      for (let i = 0; i < 32; i++) ob({ f: 'HM', fecha: hoy(), turno: i < 16 ? 'Matutino' : 'Vespertino', cat: pick(L.categoria.slice(0, 4), [5, 2, 2, 1]), mom: pick(L.momento, [3, 2, 1, 3, 2]), acc: pick(L.accion, [7, 1, 2]), guantes: pick(['No', 'Sí'], [9, 1]) });
+      for (let i = 1; i <= 4; i++) ob({ f: 'CVC', cuna: 'C-' + i, tipo: pick(L.cateter, [1, 1, 1, 1]), nec: 'Sí', apo: pick(['Sí', 'No'], [4, 1]), des: 'Sí', equ: 'Sí', hm: pick(['Sí', 'No'], [5, 1]) });
+      for (let i = 1; i <= 2; i++) ob({ f: 'VM', cuna: 'V-' + i, dias: 3 + i, ext: 'Sí', cab: 'Sí', asp: 'Sí', oral: pick(['Sí', 'No'], [2, 1]), circ: 'Sí', hm: 'Sí' });
+      for (let i = 0; i < 20; i++) ob({ f: 'AMB', sup: L.superficie[i % L.superficie.length], ubic: 'Cuna ' + (i + 1), met: L.metodo[0], res: pick(L.conforme, [5, 1]) });
+      for (let i = 1; i <= 3; i++) ob({ f: 'ATB', cuna: 'A-' + i, eg: 30 + i, peso: 1400 + 200 * i, atb: 'Ampicilina + amikacina', ind: L.indic[0], dias: i + 1, restr: 'No', dx: 'Sí', hc: pick(['Sí', 'No'], [3, 1]), reval: 'Sí', cont: 'No', dur: 'Sí', guia: 'Sí', preaut: 'N/A' });
+      for (let i = 1; i <= 12; i++) ob({ f: 'CENSO', cuna: 'N-' + i, eg: 28 + (i % 10), peso: 900 + 150 * i, dv: i * 2, cvc: i <= 4 ? 'Sí' : 'No', vm: i <= 2 ? 'Sí' : 'No', cpap: i % 3 ? 'No' : 'Sí', atb: i <= 3 ? 'Sí' : 'No', ibp: L.ibp[0], alim: pick(L.alim, [3, 2, 1, 1]), cal: pick(L.calostro, [3, 1, 1, 1]), cang: i % 2 ? 'Sí' : 'No', horas: i % 2 ? 4 + (i % 5) : '', padres: pick(['Sí', 'No'], [4, 1]) });
+      DATA.indicadores.filter(d => !d.auto).forEach((d, i) => { if (i % 3 === 2) return; const n = Math.round(Math.random() * 8), den = d.soloNumerador ? '' : 300 + Math.round(Math.random() * 700); put(v, 'ind', d.codigo, { num: n, den, basal: d.regla === 'INFO' ? '' : Math.round((1 + Math.random() * 8) * 10) / 10 }, ''); });
+      toast('Visita de práctica llenada con datos de ejemplo'); render();
     },
     borrarVisita() {
       const propios = Object.entries(DB.recs).filter(([k, r]) => r.v === S.v);
