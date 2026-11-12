@@ -777,6 +777,7 @@ details summary{cursor:pointer;color:var(--g);font-size:13px;margin-top:6px}
       '<label>Clave de la brigada (si se configuró TOKEN)<input data-cfg="token" value="' + esc(CFG.token) + '"></label>' +
       '<div class="row"><button class="btn pri" data-a="probar">Guardar y probar conexión</button><span id="prueba" class="muted"></span></div></div>' +
       '<div class="card"><h3>Respaldo</h3><p class="muted small">Exporte un respaldo de todo lo capturado en este dispositivo o importe uno.</p><div class="row"><button class="btn" data-a="respaldo">Descargar respaldo (.json)</button><label class="btn">Importar respaldo<input type="file" accept=".json" id="importar" hidden></label></div></div>' +
+      '<div class="card"><h3>Borrar datos de este dispositivo</h3><p class="muted small">Úselo para quitar pruebas antes de conectar la app o al prestar el equipo. No borra nada de la hoja de Google.</p><button class="btn" data-a="borrarLocal">Borrar datos de este dispositivo</button></div>' +
       '<div class="card"><h3>Estado</h3><p class="small">Registros en este dispositivo: ' + Object.keys(DB.recs).length + ' · Pendientes de enviar: ' + Object.keys(OUTBOX).length + (ultimaSync ? ' · Última sincronización: ' + hora(ultimaSync) : '') + '</p></div></main>';
     return h;
   }
@@ -1128,8 +1129,24 @@ details summary{cursor:pointer;color:var(--g);font-size:13px;margin-top:6px}
       ir({ p: 'datos', v: id });
     },
     borrarVisita() {
-      if (!confirm('¿Eliminar esta visita? Desaparecerá de la lista para todos (queda marcada como eliminada en la hoja de respaldo).')) return;
+      const propios = Object.entries(DB.recs).filter(([k, r]) => r.v === S.v);
+      const enServidor = propios.some(([k, r]) => r.rev);
+      if (!enServidor) {
+        if (!confirm('¿Eliminar esta visita? Nunca se envió al servidor, así que se borra por completo de este dispositivo y no llegará a la hoja de Google.')) return;
+        propios.forEach(([k]) => { delete DB.recs[k]; delete OUTBOX[k]; });
+        saveDB(); delete cache[S.v]; ir({ p: 'inicio' }); return;
+      }
+      if (!confirm('¿Eliminar esta visita? Desaparecerá de la lista para toda la brigada. En la hoja de Google queda marcada como eliminada hasta que el responsable la depure (menú Cédula UCIN).')) return;
+      Object.keys(OUTBOX).forEach(k => { if (OUTBOX[k].v === S.v) delete OUTBOX[k]; });
       put(S.v, 'visita', 'meta', { estado: 'eliminada' }, 'eliminada', true); ir({ p: 'inicio' });
+    },
+    borrarLocal() {
+      const p = Object.keys(OUTBOX).length;
+      if (!confirm('¿Borrar TODO lo guardado en este dispositivo?' + (p ? '\n\nHay ' + p + ' cambio(s) que todavía NO se envían a la hoja de Google; se perderán.' : '') + '\n\nLo que ya está en la hoja de Google no se toca: se vuelve a descargar al sincronizar.')) return;
+      DB = { recs: {}, rev: 0 }; OUTBOX = {}; saveDB();
+      Object.keys(cache).forEach(k => delete cache[k]);
+      try { Object.keys(localStorage).filter(k => k.startsWith('cedula.borr.')).forEach(k => localStorage.removeItem(k)); } catch (e) {}
+      toast('Datos del dispositivo borrados'); programarSync(300); ir({ p: 'inicio' }); render();
     },
     filtro(el) { LS.set('cedula.filtro', el.dataset.f); render(true); },
     asig(el) { put(S.v, 'asig', el.dataset.m, { quien: el.dataset.q === 'yo' ? CFG.evaluador : '' }, el.dataset.q === 'yo' ? CFG.evaluador : ''); render(true); },
